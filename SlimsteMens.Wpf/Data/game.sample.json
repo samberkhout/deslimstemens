@@ -1,0 +1,21 @@
+{
+  "Rounds": [
+    {
+      "Name": "Open Deur",
+      "Type": "OpenDoor",
+      "Questions": [
+        {
+          "Text": "Voorbeeldvraag",
+          "Options": [
+            { "Text": "Antwoord 1", "IsCorrect": true },
+            { "Text": "Antwoord 2", "IsCorrect": false }
+          ]
+        }
+      ]
+    }
+  ],
+  "Teams": [
+    { "Name": "Team A", "Seconds": 60 },
+    { "Name": "Team B", "Seconds": 60 }
+  ]
+}

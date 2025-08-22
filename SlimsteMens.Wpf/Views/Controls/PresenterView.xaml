@@ -1,0 +1,14 @@
+<UserControl x:Class="SlimsteMens.Wpf.Views.Controls.PresenterView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Margin="20">
+        <TextBlock Text="Presenter" FontSize="24" Margin="0,0,0,10" />
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <Button Content="Prev" Command="{Binding PrevQuestionCommand}" />
+            <Button Content="Next" Command="{Binding NextQuestionCommand}" />
+            <Button Content="Start" Command="{Binding StartTimerCommand}" />
+            <Button Content="Stop" Command="{Binding StopTimerCommand}" />
+        </StackPanel>
+        <TextBlock Text="{Binding RemainingSeconds}" FontSize="32" />
+    </StackPanel>
+</UserControl>
