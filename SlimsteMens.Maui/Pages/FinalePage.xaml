@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="SlimsteMens.Maui.Pages.FinalePage">
+    <StackLayout Padding="20" Spacing="20">
+        <Label Text="Finale" FontSize="32" />
+    </StackLayout>
+</ContentPage>

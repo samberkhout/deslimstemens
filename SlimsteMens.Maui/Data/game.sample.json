@@ -1,0 +1,25 @@
+{
+  "Rounds": [
+    {
+      "Title": "3-6-9",
+      "Questions": [
+        {
+          "Text": "Wat is 3?",
+          "Options": [
+            { "Text": "Drie", "IsCorrect": true },
+            { "Text": "Vier", "IsCorrect": false }
+          ],
+          "CorrectIndex": 0
+        }
+      ]
+    },
+    {
+      "Title": "Open Deur",
+      "Questions": []
+    }
+  ],
+  "Teams": [
+    { "Name": "Team A", "Seconds": 60 },
+    { "Name": "Team B", "Seconds": 60 }
+  ]
+}

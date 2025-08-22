@@ -1,0 +1,12 @@
+# Game JSON Schema
+- `Rounds`: array of rounds
+  - `Title`: string
+  - `Questions`: array of questions
+    - `Text`: string
+    - `Options`: array of answer options
+      - `Text`: string
+      - `IsCorrect`: bool
+    - `CorrectIndex`: int
+- `Teams`: array of teams
+  - `Name`: string
+  - `Seconds`: int
