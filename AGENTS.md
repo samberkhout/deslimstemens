@@ -1,137 +1,251 @@
-﻿WPF Slimste Mens Quizapp
-🎯 Doel
+﻿# CLAUDE\_MAUI.md – .NET MAUI Twee‑scherm Quizapp (Presenter + Audience) met Editor, Scorebord, Finale & Media‑sync
+
+> **Doel**: Bouw een **.NET MAUI (.NET 9)** app in de stijl van *De Slimste Mens* die primair op **Windows** draait met twee vensters (Presenter + Audience), en die later uitbreidbaar is naar Android/iOS (met platform‑specifieke beperkingen). Inclusief editor, scorebord, finale en media‑sync.
+
+---
+
+## 0) Acceptatiecriteria (MVP Windows)
+
+* **Twee vensters**: `PresenterWindow` (primair scherm) en `AudienceWindow` (fullscreen op 2e scherm).
+* **Realtime sync**: vraag/opties/timer/scorebord tussen Presenter ↔ Audience via gedeelde ViewModels/Services.
+* **Editor**: CRUD rondes, vragen, opties; **JSON load/save**.
+* **Finale**: aftelklok + knoppen ±10 s per team; winnaar bij 0 s.
+* **Open Deur**: video/audio/beeld afgespeeld in Presenter, synchroon in Audience.
+* **Styling**: donkere achtergrond, witte typografie, gouden accenten (tv‑look).
+* **Hotkeys (Windows)**: ←/→, 1–8, Space, Enter, S/D, F11.
+
+> **Opmerking**: Multi‑window + tweede monitor is **volledig ondersteund op Windows**. Op Android/iOS is een 2e beeldscherm zeldzaam en anders aangestuurd; zie §9.
+
+---
+
+## 1) Projectstructuur
+
+```
+SlimsteMens.Maui/
+├─ SlimsteMens.Maui.csproj
+├─ App.xaml
+├─ App.xaml.cs
+├─ Resources/
+│  ├─ Styles/Colors.xaml        # palet (donker, wit, goud)
+│  └─ Styles/Styles.xaml        # Buttons, Labels, Progress/Graphics
+├─ Models/
+│  ├─ Enums.cs                  # RoundType
+│  ├─ AnswerOption.cs
+│  ├─ Question.cs
+│  ├─ Round.cs
+│  ├─ Team.cs                   # Scorebord
+│  └─ Game.cs
+├─ Services/
+│  ├─ GameRepository.cs         # JSON load/save (async)
+│  ├─ MediaSyncService.cs       # MediaPath/IsPlaying/Position
+│  ├─ DisplayService.cs         # IDisplayService + partial platform impl
+│  └─ NavigationService.cs      # (optioneel) shell‑navigatie/VM route
+├─ ViewModels/
+│  ├─ BaseViewModel.cs
+│  ├─ PresenterViewModel.cs
+│  ├─ AudienceViewModel.cs
+│  ├─ EditorViewModel.cs
+│  └─ ScoreboardViewModel.cs
+├─ Pages/
+│  ├─ PresenterPage.xaml(.cs)
+│  ├─ AudiencePage.xaml(.cs)
+│  ├─ EditorPage.xaml(.cs)
+│  ├─ ScoreboardPage.xaml(.cs)
+│  └─ FinalePage.xaml(.cs)
+├─ Windows/
+│  ├─ PresenterWindow.cs        # MAUI Window wrapper voor PresenterPage
+│  └─ AudienceWindow.cs         # MAUI Window wrapper voor AudiencePage
+├─ Platforms/
+│  ├─ Windows/
+│  │  ├─ DisplayService.Windows.cs  # plaats Audience op 2e scherm met WinUI interop
+│  │  └─ App.xaml.cs (gegenereerd door MAUI)
+│  ├─ Android/
+│  │  └─ DisplayService.Android.cs  # (optioneel) Presentation op externe display
+│  └─ iOS/
+│     └─ DisplayService.iOS.cs      # (optioneel) UIScreen/UIScene
+└─ Data/
+   ├─ game.sample.json          # Copy to Output: Copy always
+   └─ schema.md
+```
+
+---
+
+## 2) Tech stack & NuGet
+
+* **.NET 9**, **.NET MAUI** (Single‑project).
+* **CommunityToolkit.Mvvm** – MVVM (ObservableObject, RelayCommand).
+* **CommunityToolkit.Maui** – extra controls/effects.
+* **CommunityToolkit.Maui.MediaElement** – **MediaElement** voor video/audio (Open Deur).
+* **System.Text.Json** – JSON load/save (geïndenteerd, ignore nulls).
+
+In `MauiProgram.cs` registreren:
+
+```csharp
+builder.UseMauiApp<App>()
+       .UseMauiCommunityToolkit()
+       .UseMauiCommunityToolkitMediaElement();
+```
+
+---
+
+## 3) Data‑model (identiek aan WPF/WinUI varianten)
+
+```csharp
+public enum RoundType { ThreeSixNine, OpenDoor, Puzzle, Finale }
+public class AnswerOption { public string Text { get; set; } = string.Empty; public bool IsCorrect { get; set; } }
+public class Question { public string Title { get; set; } = string.Empty; public List<AnswerOption> Options { get; set; } = new(); public string? MediaPath { get; set; } }
+public class Round { public RoundType Type { get; set; } public string Name { get; set; } = string.Empty; public int TimeSeconds { get; set; } = 60; public List<Question> Questions { get; set; } = new(); }
+public class Team { public string Name { get; set; } = "Team"; public int Seconds { get; set; } = 60; public bool IsActive { get; set; } }
+public class Game { public string Title { get; set; } = "Quiz"; public List<Team> Teams { get; set; } = new(); public List<Round> Rounds { get; set; } = new(); }
+```
+
+---
 
-Een WPF (.NET 9) applicatie in de stijl van De Slimste Mens met twee schermen (Presenter & Audience), inclusief editor, scorebord, finale en media-sync.
+## 4) Windows & multi‑window (Windows platform)
 
-👥 Agents en verantwoordelijkheden
-1. Architect Agent
+### 4.1 Twee vensters openen in MAUI
 
-Stelt de projectstructuur op (mappen, bestanden).
+```csharp
+// App.xaml.cs
+protected override async void OnStart()
+{
+    var repo = new Services.GameRepository();
+    var path = FileSystem.AppDataDirectory + "/game.sample.json"; // of meegeleverd uit Resources/Data
+    var game = File.Exists(path) ? await repo.LoadAsync(path) : new Models.Game();
 
-Bewaakt het gebruik van MVVM en scheiding tussen View, ViewModel en Model.
+    var presenterVm = new ViewModels.PresenterViewModel(game);
+    var audienceVm  = new ViewModels.AudienceViewModel(presenterVm);
 
-Zorgt dat .NET 9 + WPF correct is ingesteld.
+    var presenterWin = new Windows.PresenterWindow(new Pages.PresenterPage { BindingContext = presenterVm });
+    var audienceWin  = new Windows.AudienceWindow (new Pages.AudiencePage  { BindingContext = audienceVm  });
 
-Documenteert beslissingen in CLAUDE.md.
+    // Open beide windows
+    Application.Current?.OpenWindow(presenterWin);
+    Application.Current?.OpenWindow(audienceWin);
 
-2. Data Agent
+    // Windows-specifiek: plaats Audience op 2e scherm fullscreen
+    await Services.DisplayService.Instance.FullscreenAudienceOnSecondaryAsync(audienceWin);
+}
+```
 
-Definieert Models (Game, Round, Question, AnswerOption, Team).
+### 4.2 Positioneren op 2e scherm (Windows)
 
-Ontwerpt en onderhoudt JSON schema (schema.md).
+In `Platforms/Windows/DisplayService.Windows.cs` gebruik **WinUI interop**:
 
-Levert voorbeeldbestand game.sample.json.
+```csharp
+#if WINDOWS
+using Microsoft.UI;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
+using WinRT.Interop;
 
-Zorgt voor backward compatibility bij wijzigingen.
+namespace SlimsteMens.Maui.Services;
 
-3. UI/UX Agent
+public partial class DisplayService
+{
+    public static DisplayService Instance { get; } = new();
 
-Ontwerpt de Audience- en Presenter-vensters in XAML.
+    public async Task FullscreenAudienceOnSecondaryAsync(Window audienceWin)
+    {
+        var native = audienceWin.Handler!.PlatformView as Microsoft.UI.Xaml.Window;
+        if (native is null) return;
+        var hwnd = WindowNative.GetWindowHandle(native);
+        var id = Win32Interop.GetWindowIdFromWindow(hwnd);
+        var appWin = AppWindow.GetFromWindowId(id);
 
-Past styling toe geïnspireerd op De Slimste Mens:
+        var areas = DisplayArea.FindAll();
+        var secondary = areas.FirstOrDefault(a => !a.IsPrimary) ?? areas.First();
+        var wa = secondary.WorkArea;
+        appWin.MoveAndResize(new Windows.Graphics.RectInt32(wa.X, wa.Y, wa.Width, wa.Height));
+        if (appWin.Presenter is OverlappedPresenter ov) ov.SetBorderAndTitleBar(false, false);
+        appWin.SetPresenter(AppWindowPresenterKind.FullScreen);
+        await Task.CompletedTask;
+    }
+}
+#endif
+```
 
-Donkere achtergrond
+> **Note**: Dit werkt op **Windows 11**. Voor Windows 10 fallback: Maximize en handmatig verplaatsen.
 
-Witte typografie
+---
 
-Gouden accenten
+## 5) Pages (UI)
 
-Ronde klok in Finale
+* **PresenterPage**: Navigatie (prev/next), timer knoppen, vraag + opties (toggle correct), statusbalk (progress).
+* **AudiencePage**: Grote vraag (48–64pt), opties (28–36pt), ✓ bij correct, subtiele animaties.
+* **ScoreboardPage**: Teams met seconden, ±10 knoppen (Presenter) en grote weergave (Audience).
+* **FinalePage**: ronde klok + ±10 per team; Audience toont centrale klok en standen.
+* **EditorPage**: CRUD rondes/vragen/opties, tijd per ronde, MediaPath.
 
-Zorgt voor animaties (fade-ins, glow, aftelklok).
+**Media (Open Deur)**: gebruik `CommunityToolkit.Maui.MediaElement` op beide pages; bind aan `MediaSyncService` (`MediaPath`, `IsPlaying`, `Position`). MVP: startsync bij vraagstart; optioneel periodieke pos‑sync.
 
-Bewaakt toegankelijkheid (grote letters, contrast).
+---
 
-4. Logic Agent
+## 6) ViewModels
 
-Bouwt PresenterViewModel: navigatie, timer, reveal answers.
+* **PresenterViewModel**: `Game`, `RoundIndex`, `QuestionIndex`, `RemainingSeconds`, `IsTimerRunning` + Commands (`Next`, `Prev`, `Start`, `Stop`, `Reset`, `RevealAll`, `ResetAnswers`). Timer via `IDispatcherTimer`.
+* **AudienceViewModel**: referentie naar PresenterVM/gedeelde state; alleen‑lezen bindings.
+* **EditorViewModel**: `Game`, `SelectedRound`, `SelectedQuestion` + CRUD + Save/Load.
+* **ScoreboardViewModel**: `ObservableCollection<Team>`, `ActiveTeam`, `AddSeconds(Team,int)`.
 
-Bouwt ScoreboardViewModel: teams, seconden, actief team, +/– functies.
+---
 
-Bouwt EditorViewModel: CRUD rondes/vragen/opties.
+## 7) Styling (tv‑look)
 
-Verzorgt hotkeys: ←/→, 1–8, Space, Enter, S/D, F11.
+* **Colors.xaml**: achtergrond `#0B0C10`, tekst `#FFFFFF`, accent `#FFD700`/`#FFAA00`.
+* **Styles.xaml**: Buttons met CornerRadius, Labels met grote font sizes, `ProgressBar`/`GraphicsView` voor klok/balken.
+* **Animaties**: `Fade`/`Scale` op opties; **Finale‑klok** via `GraphicsView` of `ProgressBar` met converter.
 
-Implementeert finale-logica (aftellen, winnaar bepalen).
+---
 
-5. Media Agent
+## 8) Hotkeys (Windows)
 
-Bouwt MediaSyncService: MediaPath, IsPlaying, Position.
+In `Platforms/Windows` kun je keyboard events koppelen aan de actieve `PresenterWindow` en commands oproepen (via handler events).
 
-Integreert WPF MediaElement in Presenter en Audience.
+Mapping: Left/Right → Prev/Next; D1..D8 → toggle; Space → Start/Stop; Enter → Next; S/D → −10/+10; F11 → opnieuw fullscreen.
 
-Zorgt voor sync van Play/Pause/Position.
+---
 
-Test videofragmenten, audio en afbeeldingen in Open Deur.
+## 9) Platform‑notities (Android/iOS)
 
-6. Multi-screen Agent
+* **Android**: externe displays via `DisplayManager` + `Presentation`; niet gegarandeerd beschikbaar. Voor nu negeren of placeholder melding.
+* **iOS**: extra scherm via `UIScreen`/`UIWindow` met scenes; zeldzaam. Voor nu negeren of placeholder.
 
-Bouwt DisplayService:
+> MVP richt zich op **Windows**. Houd de services **partial** zodat later per platform specifieke implementaties toegevoegd kunnen worden.
 
-Detecteert 2e scherm (System.Windows.Forms.Screen.AllScreens).
+---
 
-Zet AudienceWindow fullscreen op 2e scherm (borderless, cursor verborgen).
+## 10) Runnen in Rider
 
-Fallback: max op primair scherm + melding.
+1. Open de solution (`.sln`).
+2. Zorg dat **.NET 9 SDK** en **MAUI workloads** geïnstalleerd zijn:
 
-Luistert naar DisplaySettingsChanged voor hotplug.
+    * `dotnet workload install maui`
+3. Kies **Run Configuration**: *Windows Machine* (SlimsteMens.Maui).
+4. Run (Shift+F10). PresenterWindow opent; AudienceWindow wordt fullscreen op 2e scherm gezet (of gemaximaliseerd bij 1 scherm).
 
-7. QA/Test Agent
+---
 
-Stelt testcases op (zie Testplan in CLAUDE.md).
+## 11) Testplan
 
-Verifieert:
+* **Twee‑scherm**: Audience op 2e, borderless fullscreen.
+* **Sync**: Presenter toggles zichtbaar in Audience (opties, ✓, timer, scorebord).
+* **Editor**: CRUD werkt; JSON Save/Load rondes/teams/vragen.
+* **Finale**: klok telt af; ±10 knoppen passen seconden aan; winnaar bij einde.
+* **Media**: Presenter Play/Pause → Audience volgt (MVP startsync).
 
-JSON load/save correct.
+---
 
-Audience sync met Presenter.
+## 12) Bijlagen
 
-Scorebord updates werken.
+* `Data/game.sample.json` (gebruik de versie uit je WPF/WinUI documentatie; zet **Copy always** in csproj of embed als Content).
+* `schema.md` (veld‑beschrijvingen + JSON Schema Draft‑07).
 
-Finale klok + seconds logic correct.
+---
 
-Media sync stabiel.
+## 13) Definition of Done
 
-Logt bugs en bevindingen.
-
-8. Build & DevOps Agent
-
-Zorgt dat project compileert met Rider & dotnet CLI.
-
-Schrijft README.md met installatie- en run-instructies.
-
-Zet Run Configurations correct.
-
-Zorgt dat Data/game.sample.json op Copy Always staat.
-
-Eventueel CI/CD setup (GitHub Actions of JetBrains Space).
-
-🔄 Workflow
-
-Architect Agent zet basisproject + structuur op.
-
-Data Agent levert modellen en JSON.
-
-UI/UX Agent ontwerpt views in XAML.
-
-Logic Agent implementeert ViewModels + hotkeys.
-
-Media Agent voegt Open Deur sync toe.
-
-Multi-screen Agent maakt Audience fullscreen.
-
-QA Agent test scenario’s en logt resultaten.
-
-DevOps Agent borgt build & run (Rider/dotnet).
-
-✅ Definition of Done
-
-Twee vensters (Presenter + Audience) correct werkend op 2 schermen.
-
-Editor, Scorebord, Finale en Media-sync volledig functioneel.
-
-JSON save/load werkt en valideert tegen schema.
-
-Styling herkenbaar als De Slimste Mens.
-
-Project start in Rider met .NET 9 zonder fouten.    
+* Twee vensters (Presenter + Audience) draaien op Windows en plaatsen Audience fullscreen 2e scherm.
+* Editor, Scorebord, Finale en Media‑sync werken volgens acceptatiecriteria.
+* JSON save/load correct; styling tv‑look; hotkeys actief (Windows).
+* Project buildt en start in **Rider** zonder fouten.
