@@ -1,9 +1,0 @@
-<Window x:Class="SlimsteMens.Wpf.Views.PresenterWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="clr-namespace:SlimsteMens.Wpf.Views.Controls"
-        Title="Presenter" Width="800" Height="600">
-    <Grid>
-        <controls:PresenterView/>
-    </Grid>
-</Window>
